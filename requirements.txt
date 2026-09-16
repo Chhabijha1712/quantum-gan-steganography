@@ -1,0 +1,29 @@
+# requirements.txt  (NEW FILE)
+# ---------------------------------
+# Colab mein har notebook session ke start mein "!pip install ..." chalta
+# tha kyunki Colab ki VM har baar fresh hoti hai. VS Code mein tum apna
+# hi environment (venv/conda) use karti ho jo persist karta hai -- isliye
+# ye ek baar chalao aur bas:
+#
+#   python -m venv venv
+#   venv\Scripts\activate        (Windows)
+#   source venv/bin/activate     (Mac/Linux)
+#   pip install -r requirements.txt
+#
+# qiskit + qiskit-aer thode heavy hain (quantum key generation ke liye) --
+# agar install mein dikkat aaye to ye do hata bhi sakti ho, quantum_key.py
+# apne aap classical secure RNG (Python's `secrets` module) pe fallback
+# kar leta hai, pipeline nahi tootegi.
+
+torch
+torchvision
+qiskit
+qiskit-aer
+cryptography
+reedsolo
+scikit-image
+scikit-learn
+matplotlib
+numpy
+Pillow
+streamlit

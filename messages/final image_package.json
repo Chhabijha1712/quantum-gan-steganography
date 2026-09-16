@@ -1,0 +1,10 @@
+{
+  "wrapped_aes_key_b64": "ZC0IhGNT7tD4NYAZnDSgDq/rE9UF/0JOpNp2j1bqBn3pRDx+yJbPF8JASDAY6zhRMO/7qR095SJg21/+TmIQsLaIPNIVpB4N0SBXC3JFOHHTP5c0o3z1OmSlycoCg4xPAv+/fkKFSaJijU0KS64tBf5U8mPB598GAPic2eokNH4SQU/Q3Dce9q8atDHtY0iDFPriGhUai/ZmADAxBCIAKLsQq75q6gRRLL2hBzQWBwDC3f+OWSNAOAsl7prnodvOHnybp8b4DB5R4tquJnF60hOkrQxwwwQSUim0ZXgRB+btES9EIxdHwSwJ4fsfWDJ+GIF+uI8zS6pJ8Oy/ZKeamw==",
+  "nonce_b64": "/payis7+yTcq4mpOyJJCCA==",
+  "secret_shape": [
+    3,
+    128,
+    128
+  ],
+  "image_size": 128
+}

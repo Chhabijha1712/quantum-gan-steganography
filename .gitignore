@@ -1,0 +1,11 @@
+Set-Content .gitignore @"
+__pycache__/
+*.pyc
+dataset/
+messages/_uploads/
+messages/_api_jobs/
+keys/*.pem
+*.qsteg
+venv/
+.env
+"@
