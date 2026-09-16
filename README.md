@@ -54,6 +54,32 @@ Two recoveries are always shown side by side:
 
 ---
 
+## 🧬 Model Architecture
+
+| Network | Role | Key Config |
+|---|---|---|
+| **Encoder** | Takes the cover image + (encrypted, RS-coded) secret and produces a stego image by adding a learned residual perturbation | `ENCODER_HIDDEN_CHANNELS`, `RESIDUAL_STRENGTH` (controls how strongly the secret is embedded) |
+| **Decoder** | Takes the stego image alone and reconstructs the hidden payload | `DECODER_HIDDEN_CHANNELS` |
+| **Discriminator** | Tries to distinguish stego images from clean cover images; its feedback pushes the Encoder toward imperceptibility | `DISCRIMINATOR_HIDDEN_CHANNELS` |
+
+**Combined loss function**, balanced by three tunable weights (all in `config.py`):
+
+```
+Total Loss = α · Reconstruction Loss + β · Image Quality Loss + γ · Adversarial Loss
+```
+
+| Weight | Effect when increased |
+|---|---|
+| `ALPHA_RECONSTRUCTION` | Decoder recovers the secret more accurately |
+| `BETA_IMAGE_QUALITY` | Stego image stays closer to the cover (less visible) |
+| `GAMMA_ADVERSARIAL` | Harder for the discriminator to detect the stego image |
+
+An optional **perceptual (VGG feature-space) loss** can be enabled for the plain (non-encrypted) mode, which targets structural/texture fidelity beyond plain pixel-wise MSE — useful when the secret is a natural image rather than encrypted noise.
+
+Training also supports a **reconstruction warm-up**: the adversarial loss (`γ`) stays off for the first few epochs so the Encoder/Decoder can learn the core hiding/recovery task before the discriminator starts pushing back.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -153,6 +179,22 @@ Upload a cover image and a secret image, generate a receiver identity, hide the 
 ## ⚠️ Security Note
 
 This is an academic/research project demonstrating the intersection of cryptography and neural steganography. The `keys/` folder contains real RSA key material when generated locally — **never commit real keys to a public repository.**
+
+---
+
+## 🙏 Acknowledgements
+
+- [DIV2K Dataset](https://data.vision.ee.ethz.ch/cvl/DIV2K/) — high-resolution cover/secret image source
+- PyTorch, Streamlit, and PyCryptodome open-source communities
+
+---
+
+## 👤 Owner
+
+**Chhabi Jha**
+Major Project — G.H. Raisoni College of Engineering
+📧 chhabijha0@gmail.com
+🔗 [GitHub](https://github.com/Chhabijha1712)
 
 ---
 
