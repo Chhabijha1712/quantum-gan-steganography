@@ -1,17 +1,3 @@
-"""
-streamlit_app.py — polished, recruiter-ready browser UI
---------------------------------------------------------------
-Same send.py/receive.py backend — only the presentation layer changed.
-A calm, light canvas; a fixed (non-spinning) quantum-lock mark as the one
-memorable visual; three colour-coded section tabs (Sender / Receiver /
-How It Works); consistent card system for every upload/key field; and
-motion reserved for things the person actually does (hover a button,
-watch the live pipeline run) rather than scattered on every element.
-
-Run:
-    streamlit run streamlit_app.py
-"""
-
 import os
 import re
 import sys
@@ -686,22 +672,32 @@ with tab_send:
             )
             stego_path, enc_path, package_path, bundle_path, cover_resized_path = result
 
-            st.success("✅  Secret hidden and encrypted successfully.")
-            st.caption(f"Both images below are shown at the model's actual working "
-                       f"resolution ({CFG.IMAGE_SIZE}x{CFG.IMAGE_SIZE}) for a fair comparison.")
-
-            c1, c2 = st.columns(2)
-            with c1:
-                st.image(cover_resized_path, caption="Cover (as the model sees it)", width=350)
-            with c2:
-                st.image(stego_path, caption="Stego (secret hidden inside)", width=350)
-
             with open(bundle_path, "rb") as f:
-                st.download_button(
-                    "⬇️  Download Message File (.qsteg) — send this one file to the receiver",
-                    data=f, file_name=os.path.basename(bundle_path),
-                    mime="application/zip", use_container_width=True,
-                )
+                bundle_bytes = f.read()
+            st.session_state["send_result"] = {
+                "cover_resized_path": cover_resized_path,
+                "stego_path": stego_path,
+                "bundle_path": bundle_path,
+                "bundle_bytes": bundle_bytes,
+            }
+
+    if "send_result" in st.session_state:
+        r = st.session_state["send_result"]
+        st.success("✅  Secret hidden and encrypted successfully.")
+        st.caption(f"Both images below are shown at the model's actual working "
+                   f"resolution ({CFG.IMAGE_SIZE}x{CFG.IMAGE_SIZE}) for a fair comparison.")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.image(r["cover_resized_path"], caption="Cover (as the model sees it)", width=350)
+        with c2:
+            st.image(r["stego_path"], caption="Stego (secret hidden inside)", width=350)
+
+        st.download_button(
+            "⬇️  Download Message File (.qsteg) — send this one file to the receiver",
+            data=r["bundle_bytes"], file_name=os.path.basename(r["bundle_path"]),
+            mime="application/zip", use_container_width=True, key="dl_bundle",
+        )
 
 # ============================== RECEIVER ==============================
 with tab_receive:
@@ -721,16 +717,26 @@ with tab_receive:
             pub_path = os.path.join(CFG.KEYS_DIR, "receiver_public_key.pem")
             serialize_private_key(priv, priv_path)
             serialize_public_key(pub, pub_path)
+
+            with open(pub_path, "rb") as f:
+                st.session_state["pub_key_bytes"] = f.read()
+            with open(priv_path, "rb") as f:
+                st.session_state["priv_key_bytes"] = f.read()
             st.success("✅  Keys generated.")
+
+
+        if "pub_key_bytes" in st.session_state:
             c1, c2 = st.columns(2)
             with c1:
-                with open(pub_path, "rb") as f:
-                    st.download_button("⬇️  Download Public Key — share with sender", f,
-                                        file_name="receiver_public_key.pem", use_container_width=True)
+                st.download_button("⬇️  Download Public Key — share with sender",
+                                    st.session_state["pub_key_bytes"],
+                                    file_name="receiver_public_key.pem",
+                                    use_container_width=True, key="dl_pub_key")
             with c2:
-                with open(priv_path, "rb") as f:
-                    st.download_button("⬇️  Download Private Key — keep confidential", f,
-                                        file_name="receiver_private_key.pem", use_container_width=True)
+                st.download_button("⬇️  Download Private Key — keep confidential",
+                                    st.session_state["priv_key_bytes"],
+                                    file_name="receiver_private_key.pem",
+                                    use_container_width=True, key="dl_priv_key")
 
     st.write("")
     step_heading("green", "2", "Decrypt and recover a message")
@@ -761,29 +767,50 @@ with tab_receive:
             )
             exact_path, stego_recovered_path, *_ = result
 
-            st.success("✅  Secret recovered successfully.")
+            # Store the result in session_state (NEW) instead of only
+            # rendering it inline here -- same reasoning as the key-
+            # download fix above: reading these bytes now and keeping
+            # them around means the images/metrics/download buttons
+            # below survive a rerun from clicking either download
+            # button, instead of the whole result vanishing after the
+            # first download.
+            with open(exact_path, "rb") as f:
+                exact_bytes = f.read()
+            with open(stego_recovered_path, "rb") as f:
+                stego_recovered_bytes = f.read()
+            st.session_state["receive_result"] = {
+                "exact_path": exact_path,
+                "stego_recovered_path": stego_recovered_path,
+                "exact_bytes": exact_bytes,
+                "stego_recovered_bytes": stego_recovered_bytes,
+                "log_text": log_text,
+            }
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.image(exact_path, caption="Exact Recovery (cryptographic — pixel-perfect)", width=350)
-            with c2:
-                st.image(stego_recovered_path, caption="Approximate Recovery (via GAN steganography)", width=350)
+    if "receive_result" in st.session_state:
+        r = st.session_state["receive_result"]
+        st.success("✅  Secret recovered successfully.")
 
-            match = re.search(r"PSNR:\s*([\d.]+)\s*dB\s*\|\s*SSIM:\s*([\d.]+)", log_text)
-            if match:
-                mcol1, mcol2 = st.columns(2)
-                mcol1.metric("PSNR (Stego Recovery)", f"{match.group(1)} dB")
-                mcol2.metric("SSIM (Stego Recovery)", match.group(2))
+        c1, c2 = st.columns(2)
+        with c1:
+            st.image(r["exact_path"], caption="Exact Recovery (cryptographic — pixel-perfect)", width=350)
+        with c2:
+            st.image(r["stego_recovered_path"], caption="Approximate Recovery (via GAN steganography)", width=350)
 
-            dl1, dl2 = st.columns(2)
-            with dl1:
-                with open(exact_path, "rb") as f:
-                    st.download_button("⬇️  Download Exact Recovery", f,
-                                        file_name=os.path.basename(exact_path), use_container_width=True)
-            with dl2:
-                with open(stego_recovered_path, "rb") as f:
-                    st.download_button("⬇️  Download Stego Recovery", f,
-                                        file_name=os.path.basename(stego_recovered_path), use_container_width=True)
+        match = re.search(r"PSNR:\s*([\d.]+)\s*dB\s*\|\s*SSIM:\s*([\d.]+)", r["log_text"])
+        if match:
+            mcol1, mcol2 = st.columns(2)
+            mcol1.metric("PSNR (Stego Recovery)", f"{match.group(1)} dB")
+            mcol2.metric("SSIM (Stego Recovery)", match.group(2))
+
+        dl1, dl2 = st.columns(2)
+        with dl1:
+            st.download_button("⬇️  Download Exact Recovery", r["exact_bytes"],
+                                file_name=os.path.basename(r["exact_path"]),
+                                use_container_width=True, key="dl_exact")
+        with dl2:
+            st.download_button("⬇️  Download Stego Recovery", r["stego_recovered_bytes"],
+                                file_name=os.path.basename(r["stego_recovered_path"]),
+                                use_container_width=True, key="dl_stego_recovered")
 
 # ============================== ABOUT ==============================
 with tab_about:
