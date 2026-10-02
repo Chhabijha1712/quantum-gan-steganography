@@ -10,6 +10,7 @@ from config import CFG
 import send as send_module
 import receive as receive_module
 from key_exchange import generate_receiver_keypair, serialize_private_key, serialize_public_key
+from carrier import make_carrier_image, extract_bundle_from_file, to_png_bytes
 
 
 st.set_page_config(page_title="Quantum-GAN Steganography", page_icon="🔐", layout="wide")
@@ -1066,7 +1067,7 @@ if page == "Sender":
     st.write("")
     step_heading("blue", "2", "Add the receiver's key & run", "public key + output name")
 
-    kc1, kc2 = st.columns(2)
+    kc1, kc2, kc3 = st.columns(3)
     with kc1:
         with st.container(border=True):
             info_card_header("blue", "🔑", "Receiver's Public Key",
@@ -1077,6 +1078,11 @@ if page == "Sender":
         with st.container(border=True):
             info_card_header("blue", "🏷️", "Output Name", "Base name for the generated message file")
             out_name = st.text_input("Output name", value="message", key="out_send", label_visibility="collapsed")
+    with kc3:
+        with st.container(border=True):
+            info_card_header("blue", "🖼️", "Stego Image Format", "Format of the image you will download and send")
+            img_format = st.radio("Stego image format", ["PNG", "JPEG"], key="img_format",
+                                  horizontal=True, label_visibility="collapsed")
 
     st.write("")
 
@@ -1095,7 +1101,13 @@ if page == "Sender":
 
             with open(bundle_path, "rb") as f:
                 bundle_bytes = f.read()
+            carrier_bytes, carrier_ext, carrier_mime = make_carrier_image(
+                stego_path, bundle_bytes, fmt=img_format
+            )
             st.session_state["send_result"] = {
+                "carrier_bytes": carrier_bytes,
+                "carrier_name": f"{out_name or 'message'}_stego.{carrier_ext}",
+                "carrier_mime": carrier_mime,
                 "cover_resized_path": cover_resized_path,
                 "stego_path": stego_path,
                 "bundle_path": bundle_path,
@@ -1118,11 +1130,12 @@ if page == "Sender":
                 st.image(r["stego_path"], caption="Stego (secret hidden inside)", width=320)
 
         with st.container(border=True):
-            info_card_header("green", "📦", "Message File", "Send this single .qsteg file to the receiver")
+            info_card_header("green", "📨", "Stego Image — send this to the receiver",
+                              "Looks like a normal photo; the encrypted message is carried inside it")
             st.download_button(
-                "⬇️  Download Message File (.qsteg)",
-                data=r["bundle_bytes"], file_name=os.path.basename(r["bundle_path"]),
-                mime="application/zip", use_container_width=True, key="dl_bundle",
+                f"⬇️  Download Stego Image ({r['carrier_name'].rsplit('.', 1)[-1].upper()})",
+                data=r["carrier_bytes"], file_name=r["carrier_name"],
+                mime=r["carrier_mime"], use_container_width=True, key="dl_carrier",
             )
 
 # ============================== RECEIVER ==============================
@@ -1172,8 +1185,8 @@ if page == "Receiver":
     col1, col2, col3 = st.columns(3)
     with col1:
         with st.container(border=True):
-            info_card_header("green", "📦", "Message File", "The .qsteg bundle you received from the sender")
-            message_file = st.file_uploader("Message File (.qsteg)", type=["qsteg"], key="msg",
+            info_card_header("green", "🖼️", "Stego Image", "The PNG / JPG image you received from the sender")
+            message_file = st.file_uploader("Stego Image (PNG / JPG)", type=["png", "jpg", "jpeg"], key="msg",
                                              label_visibility="collapsed")
     with col2:
         with st.container(border=True):
@@ -1189,9 +1202,18 @@ if page == "Receiver":
 
     if st.button("🔓  Decrypt and Recover", type="primary", use_container_width=True):
         if not (message_file and privkey_file):
-            st.error("The message file (.qsteg) and your private key are both required.")
+            st.error("The stego image and your private key are both required.")
         else:
-            msg_path = save_uploaded_file(message_file, UPLOAD_DIR, "message_upload.qsteg")
+            bundle_in = extract_bundle_from_file(message_file.getvalue())
+            if bundle_in is None:
+                st.error("No hidden message found in this image. If it came through WhatsApp, it was "
+                         "probably sent as a Photo and got re-compressed — ask the sender to send it "
+                         "again as a Document (or by email).")
+                st.stop()
+            os.makedirs(UPLOAD_DIR, exist_ok=True)
+            msg_path = os.path.join(UPLOAD_DIR, "message_upload.qsteg")
+            with open(msg_path, "wb") as f:
+                f.write(bundle_in)
             privkey_path = save_uploaded_file(privkey_file, UPLOAD_DIR, "privkey_upload.pem")
 
             result, log_text = run_with_live_feedback(
@@ -1206,10 +1228,8 @@ if page == "Receiver":
             # below survive a rerun from clicking either download
             # button, instead of the whole result vanishing after the
             # first download.
-            with open(exact_path, "rb") as f:
-                exact_bytes = f.read()
-            with open(stego_recovered_path, "rb") as f:
-                stego_recovered_bytes = f.read()
+            exact_bytes = to_png_bytes(exact_path)
+            stego_recovered_bytes = to_png_bytes(stego_recovered_path)
             st.session_state["receive_result"] = {
                 "exact_path": exact_path,
                 "stego_recovered_path": stego_recovered_path,
@@ -1242,13 +1262,13 @@ if page == "Receiver":
             info_card_header("green", "⬇️", "Downloads", "Save the recovered images")
             dl1, dl2 = st.columns(2)
             with dl1:
-                st.download_button("⬇️  Download Exact Recovery", r["exact_bytes"],
-                                    file_name=os.path.basename(r["exact_path"]),
-                                    use_container_width=True, key="dl_exact")
+                st.download_button("⬇️  Download Exact Recovery (PNG)", r["exact_bytes"],
+                                    file_name=os.path.splitext(os.path.basename(r["exact_path"]))[0] + ".png",
+                                    mime="image/png", use_container_width=True, key="dl_exact")
             with dl2:
-                st.download_button("⬇️  Download Stego Recovery", r["stego_recovered_bytes"],
-                                    file_name=os.path.basename(r["stego_recovered_path"]),
-                                    use_container_width=True, key="dl_stego_recovered")
+                st.download_button("⬇️  Download Stego Recovery (PNG)", r["stego_recovered_bytes"],
+                                    file_name=os.path.splitext(os.path.basename(r["stego_recovered_path"]))[0] + ".png",
+                                    mime="image/png", use_container_width=True, key="dl_stego_recovered")
 
 # ============================== ABOUT ==============================
 if page == "Demo Steps":
